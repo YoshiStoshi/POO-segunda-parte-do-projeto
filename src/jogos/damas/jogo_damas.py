@@ -43,6 +43,7 @@ class JogoDamas(JogoTabuleiro):
             self._jogadores[0]: -1,
             self._jogadores[1]: +1,
         }
+        self._captura_em_andamento = None
 
     # ─────────────────────────────────────────────
     # Implementação dos métodos abstratos
@@ -152,6 +153,68 @@ class JogoDamas(JogoTabuleiro):
             elif peca.dono == self._jogadores[1] and lf == self.LINHAS - 1:
                 peca.promover_a_dama()
 
+        # Se houve captura, mantenha o estado de sequência de captura.
+        if abs(dl) == 2:
+            self._captura_em_andamento = peca
+        else:
+            self._captura_em_andamento = None
+
+    def _eh_captura(self, origem: Tuple[int, int], destino: Tuple[int, int]) -> bool:
+        li, ci = origem
+        lf, cf = destino
+        return abs(lf - li) == 2 and abs(cf - ci) == 2
+
+    def _capturas_para_peca(self, peca: Optional[PecaDamas]) -> List[Tuple]:
+        if peca is None or not peca.ativa:
+            return []
+
+        capturas = []
+        li, ci = peca.posicao
+        for dl, dc in [(-2, -2), (-2, 2), (2, -2), (2, 2)]:
+            lf, cf = li + dl, ci + dc
+            lm, cm = li + dl // 2, ci + dc // 2
+            if not self._tabuleiro.posicao_valida(lf, cf):
+                continue
+            if not self._tabuleiro.esta_vazia(lf, cf):
+                continue
+            meio = self._tabuleiro.obter(lm, cm)
+            if meio and meio.dono != peca.dono:
+                capturas.append(((li, ci), (lf, cf), (lm, cm)))
+        return capturas
+
+    def realizar_jogada(self, jogada: Jogada) -> bool:
+        if not self.em_andamento:
+            raise RuntimeError("O jogo já terminou.")
+
+        if not self._turno.e_turno_de(jogada.jogador):
+            raise PermissionError(
+                f"Não é o turno de {jogada.jogador.nome}. "
+                f"É o turno de {self._turno.jogador_atual.nome}."
+            )
+
+        if not self.validar_jogada(jogada):
+            return False
+
+        self.aplicar_jogada(jogada)
+        self._historico_jogadas.append(jogada)
+        self._resultado = self.verificar_fim_de_jogo()
+
+        if self.em_andamento and self._eh_captura(jogada.origem, jogada.destino):
+            peca = self._tabuleiro.obter(*jogada.destino)
+            if peca and self._capturas_para_peca(peca):
+                self._captura_em_andamento = peca
+                return True
+
+        self._captura_em_andamento = None
+        if self.em_andamento:
+            self._turno.avancar()
+
+        return True
+
+    @property
+    def captura_em_andamento(self) -> Optional[PecaDamas]:
+        return self._captura_em_andamento
+
     def verificar_fim_de_jogo(self) -> Resultado:
         """Verifica se algum jogador perdeu todas as peças ou ficou sem movimentos."""
         for jogador in self._jogadores:
@@ -240,6 +303,10 @@ class JogoDamas(JogoTabuleiro):
 
     def listar_jogadas_validas(self, jogador: Jogador) -> List[Tuple]:
         """Retorna lista de (origem, destino) de jogadas válidas para um jogador."""
+        if self._captura_em_andamento is not None:
+            capturas = self._capturas_para_peca(self._captura_em_andamento)
+            return [((c[0][0], c[0][1]), (c[1][0], c[1][1])) for c in capturas]
+
         capturas = self._listar_capturas_do_jogador(jogador)
         if capturas:
             return [(c[0], c[1]) for c in capturas]
