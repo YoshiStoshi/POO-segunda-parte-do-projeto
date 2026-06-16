@@ -25,6 +25,8 @@ class GameController:
         # Callbacks registrados pelas Views
         self.on_board_update: Optional[Callable] = None
         self.on_game_over: Optional[Callable] = None
+        self.on_game_start: Optional[Callable] = None
+        self.on_move: Optional[Callable] = None
         self.on_invalid_move: Optional[Callable] = None
         self.on_piece_selected: Optional[Callable] = None
 
@@ -38,6 +40,8 @@ class GameController:
         self._jogo = JogoDamas(self._jogadores)
         self._jogo.iniciar_partida()
         self._peca_selecionada = None
+        if self.on_game_start:
+            self.on_game_start()
         self._notificar_tabuleiro()
 
     def reiniciar_partida(self) -> None:
@@ -45,6 +49,8 @@ class GameController:
         if self._jogo:
             self._jogo.iniciar_partida()
             self._peca_selecionada = None
+            if self.on_game_start:
+                self.on_game_start()
             self._notificar_tabuleiro()
 
     # ─────────────────────────────────────────────
@@ -101,6 +107,13 @@ class GameController:
             sucesso = self._jogo.realizar_jogada(jogada)
 
             if sucesso:
+                # Notifica view sobre a jogada para efeitos (som, animação)
+                if self.on_move:
+                    try:
+                        self.on_move(origem, jogada.destino)
+                    except TypeError:
+                        # backward-compatible: allow callbacks without params
+                        self.on_move()
                 if getattr(self._jogo, "captura_em_andamento", None) is not None:
                     self._peca_selecionada = jogada.destino
                     if self.on_piece_selected:

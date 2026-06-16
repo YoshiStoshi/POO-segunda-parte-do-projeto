@@ -148,6 +148,7 @@ class BoardScreen(MDScreen):
         self._som_movimento = None
         self._som_invalid = None
         self._som_selecao = None
+        self._som_start = None
         self._registrar_callbacks()
         self._carregar_efeitos_sonoros()
         self._build_ui()
@@ -158,6 +159,8 @@ class BoardScreen(MDScreen):
             self._controller.on_game_over = self._ao_fim_de_jogo
             self._controller.on_invalid_move = self._ao_jogada_invalida
             self._controller.on_piece_selected = self._ao_selecionar_peca
+            self._controller.on_game_start = self._ao_inicio_de_jogo
+            self._controller.on_move = lambda origem, destino: self._tocar_som("move")
 
     def _carregar_efeitos_sonoros(self) -> None:
         base_dir = Path(__file__).resolve().parents[2]
@@ -166,11 +169,14 @@ class BoardScreen(MDScreen):
 
         self._criar_som_padrao(som_dir / "dama_move.wav", "move")
         self._criar_som_padrao(som_dir / "invalid.wav", "invalid")
-        self._criar_som_padrao(som_dir / "select.wav", "select")
+        # Não gerar nem carregar som de seleção (removido)
+
+        # Carrega som de início caso exista
+        self._som_start = SoundLoader.load(str(som_dir / "StartSound.wav"))
 
         self._som_movimento = SoundLoader.load(str(som_dir / "dama_move.wav"))
         self._som_invalid = SoundLoader.load(str(som_dir / "invalid.wav")) or self._som_movimento
-        self._som_selecao = SoundLoader.load(str(som_dir / "select.wav")) or self._som_movimento
+        self._som_selecao = None
 
     def _criar_som_padrao(self, caminho: Path, tipo: str) -> None:
         if caminho.exists():
@@ -328,9 +334,11 @@ class BoardScreen(MDScreen):
         Clock.schedule_once(lambda dt: Snackbar(text="Jogada inválida!").open(), 0)
 
     def _ao_selecionar_peca(self, pos_selecionada, destinos) -> None:
-        self._tocar_som("select")
         self._destinos_validos = destinos or []
         Clock.schedule_once(lambda dt: self._redesenhar_tabuleiro(), 0)
+
+    def _ao_inicio_de_jogo(self, *args) -> None:
+        self._tocar_som("start")
 
     # ─────────────────────────────────────────────
     # Interação
@@ -353,7 +361,7 @@ class BoardScreen(MDScreen):
 
         sound = {
             "invalid": self._som_invalid,
-            "select": self._som_selecao,
+            "start": self._som_start,
             "move": self._som_movimento,
         }.get(tipo)
 
